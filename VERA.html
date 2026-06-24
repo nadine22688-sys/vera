@@ -1,0 +1,874 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VERA — Nadine's AI</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=DM+Mono:wght@300;400&family=Outfit:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #09090f;
+    --bg2: #0f0f1a;
+    --bg3: #13131f;
+    --border: rgba(255,255,255,0.07);
+    --border2: rgba(255,255,255,0.12);
+    --text: #e8e8f0;
+    --text2: #9090a8;
+    --text3: #55556a;
+    --vera: #c9a96e;
+    --vera2: #e8c98a;
+    --vera3: #7a5c2e;
+    --vera-glow: rgba(201,169,110,0.15);
+    --vera-glow2: rgba(201,169,110,0.06);
+    --user: #6e8fc9;
+    --user2: rgba(110,143,201,0.12);
+    --danger: #c96e6e;
+    --success: #6ec98a;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Outfit', sans-serif;
+    font-weight: 300;
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Ambient background */
+  body::before {
+    content: '';
+    position: fixed;
+    top: -200px; left: 50%;
+    transform: translateX(-50%);
+    width: 600px; height: 400px;
+    background: radial-gradient(ellipse, rgba(201,169,110,0.04) 0%, transparent 70%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* Header */
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1.25rem 2rem;
+    border-bottom: 0.5px solid var(--border);
+    position: relative;
+    z-index: 10;
+  }
+
+  .logo-area {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+  }
+
+  .logo-name {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 28px;
+    font-weight: 300;
+    letter-spacing: 0.15em;
+    color: var(--vera);
+  }
+
+  .logo-full {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    font-weight: 300;
+    color: var(--text3);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  .header-right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .status-dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: var(--text3);
+    transition: background 0.3s, box-shadow 0.3s;
+  }
+  .status-dot.ready { background: var(--success); box-shadow: 0 0 8px var(--success); }
+  .status-dot.listening { background: var(--vera); box-shadow: 0 0 8px var(--vera); animation: dotPulse 1s infinite; }
+  .status-dot.speaking { background: var(--user); box-shadow: 0 0 8px var(--user); }
+  .status-dot.thinking { background: var(--vera2); box-shadow: 0 0 8px var(--vera2); animation: dotPulse 0.6s infinite; }
+
+  @keyframes dotPulse {
+    0%,100% { opacity: 1; } 50% { opacity: 0.3; }
+  }
+
+  .status-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    color: var(--text3);
+    letter-spacing: 0.05em;
+    min-width: 70px;
+  }
+
+  /* API Key setup */
+  #setup-screen {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 2rem;
+    padding: 2rem;
+    position: relative;
+    z-index: 10;
+  }
+
+  #setup-screen h2 {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 22px;
+    font-weight: 300;
+    color: var(--text2);
+    letter-spacing: 0.05em;
+  }
+
+  .api-input-row {
+    display: flex;
+    gap: 10px;
+    width: 100%;
+    max-width: 480px;
+  }
+
+  .api-input-row input {
+    flex: 1;
+    background: var(--bg3);
+    border: 0.5px solid var(--border2);
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+    font-size: 13px;
+    padding: 10px 14px;
+    border-radius: 8px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .api-input-row input:focus { border-color: var(--vera3); }
+  .api-input-row input::placeholder { color: var(--text3); }
+
+  .btn-primary {
+    background: transparent;
+    border: 0.5px solid var(--vera3);
+    color: var(--vera);
+    font-family: 'Outfit', sans-serif;
+    font-size: 13px;
+    font-weight: 400;
+    padding: 10px 20px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.2s, border-color 0.2s;
+    white-space: nowrap;
+  }
+  .btn-primary:hover { background: var(--vera-glow2); border-color: var(--vera); }
+
+  .setup-note {
+    font-size: 12px;
+    color: var(--text3);
+    text-align: center;
+    max-width: 400px;
+    line-height: 1.7;
+  }
+
+  /* Main interface */
+  #main-screen {
+    flex: 1;
+    display: none;
+    flex-direction: column;
+    overflow: hidden;
+    position: relative;
+    z-index: 10;
+  }
+
+  /* Chat log */
+  #chat-log {
+    flex: 1;
+    overflow-y: auto;
+    padding: 1.5rem 2rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border2) transparent;
+  }
+
+  #chat-log::-webkit-scrollbar { width: 4px; }
+  #chat-log::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+
+  .msg {
+    display: flex;
+    gap: 12px;
+    animation: msgIn 0.3s ease forwards;
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  @keyframes msgIn {
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .msg-avatar {
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+
+  .msg.vera .msg-avatar {
+    background: var(--vera-glow);
+    border: 0.5px solid var(--vera3);
+    color: var(--vera);
+  }
+
+  .msg.user .msg-avatar {
+    background: var(--user2);
+    border: 0.5px solid rgba(110,143,201,0.3);
+    color: var(--user);
+  }
+
+  .msg-content { flex: 1; }
+
+  .msg-sender {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    margin-bottom: 4px;
+  }
+  .msg.vera .msg-sender { color: var(--vera3); }
+  .msg.user .msg-sender { color: rgba(110,143,201,0.5); }
+
+  .msg-text {
+    font-size: 15px;
+    line-height: 1.75;
+    color: var(--text);
+  }
+  .msg.vera .msg-text { color: var(--text); }
+  .msg.user .msg-text { color: rgba(232,232,240,0.75); }
+
+  .msg-timestamp {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    color: var(--text3);
+    margin-top: 4px;
+  }
+
+  /* Welcome message */
+  .welcome {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    padding: 3rem 2rem;
+    text-align: center;
+    flex: 1;
+  }
+
+  .orb-container {
+    position: relative;
+    width: 100px; height: 100px;
+    display: flex; align-items: center; justify-content: center;
+  }
+
+  .orb-ring {
+    position: absolute;
+    border-radius: 50%;
+    border: 0.5px solid var(--vera3);
+    animation: orbRing 3s ease-in-out infinite;
+  }
+  .orb-ring:nth-child(1) { width: 100%; height: 100%; animation-delay: 0s; }
+  .orb-ring:nth-child(2) { width: 75%; height: 75%; animation-delay: 0.5s; opacity: 0.6; }
+  .orb-ring:nth-child(3) { width: 50%; height: 50%; animation-delay: 1s; opacity: 0.3; }
+
+  @keyframes orbRing {
+    0%,100% { opacity: 0.2; transform: scale(1); }
+    50% { opacity: 0.6; transform: scale(1.04); }
+  }
+
+  .orb-core {
+    width: 32px; height: 32px;
+    border-radius: 50%;
+    background: radial-gradient(circle, var(--vera2) 0%, var(--vera) 50%, var(--vera3) 100%);
+    box-shadow: 0 0 20px var(--vera-glow), 0 0 40px var(--vera-glow2);
+    animation: coreBreath 3s ease-in-out infinite;
+    position: relative;
+    z-index: 2;
+  }
+
+  @keyframes coreBreath {
+    0%,100% { transform: scale(1); box-shadow: 0 0 20px var(--vera-glow), 0 0 40px var(--vera-glow2); }
+    50% { transform: scale(1.08); box-shadow: 0 0 30px rgba(201,169,110,0.3), 0 0 60px var(--vera-glow); }
+  }
+
+  /* Listening state */
+  .orb-core.listening {
+    animation: coreListening 0.5s ease-in-out infinite;
+    background: radial-gradient(circle, #e8f4c9 0%, var(--vera) 50%, var(--vera3) 100%);
+  }
+  @keyframes coreListening {
+    0%,100% { transform: scale(1); }
+    50% { transform: scale(1.2); box-shadow: 0 0 40px rgba(201,169,110,0.5); }
+  }
+
+  /* Speaking state */
+  .orb-core.speaking {
+    animation: coreSpeaking 0.3s ease-in-out infinite;
+    background: radial-gradient(circle, #c9dce8 0%, var(--user) 50%, #2e4a7a 100%);
+    box-shadow: 0 0 20px rgba(110,143,201,0.3);
+  }
+  @keyframes coreSpeaking {
+    0%,100% { transform: scale(1); }
+    50% { transform: scale(1.15); }
+  }
+
+  /* Thinking state */
+  .orb-core.thinking {
+    animation: coreThinking 0.8s ease-in-out infinite;
+  }
+  @keyframes coreThinking {
+    0% { transform: rotate(0deg) scale(1); }
+    25% { transform: rotate(90deg) scale(0.95); }
+    50% { transform: rotate(180deg) scale(1); }
+    75% { transform: rotate(270deg) scale(0.95); }
+    100% { transform: rotate(360deg) scale(1); }
+  }
+
+  .welcome-title {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 32px;
+    font-weight: 300;
+    color: var(--vera);
+    letter-spacing: 0.1em;
+  }
+
+  .welcome-sub {
+    font-size: 14px;
+    color: var(--text3);
+    letter-spacing: 0.02em;
+  }
+
+  /* Bottom controls */
+  #controls {
+    padding: 1.25rem 2rem 1.5rem;
+    border-top: 0.5px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  #text-input {
+    flex: 1;
+    background: var(--bg3);
+    border: 0.5px solid var(--border2);
+    color: var(--text);
+    font-family: 'Outfit', sans-serif;
+    font-size: 14px;
+    font-weight: 300;
+    padding: 11px 16px;
+    border-radius: 10px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  #text-input:focus { border-color: var(--vera3); }
+  #text-input::placeholder { color: var(--text3); }
+
+  #mic-btn {
+    width: 44px; height: 44px;
+    border-radius: 50%;
+    background: transparent;
+    border: 0.5px solid var(--vera3);
+    color: var(--vera);
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    flex-shrink: 0;
+  }
+  #mic-btn:hover { background: var(--vera-glow2); border-color: var(--vera); }
+  #mic-btn.active { background: var(--vera-glow); border-color: var(--vera); animation: micPulse 0.8s infinite; }
+  #mic-btn.disabled { opacity: 0.3; cursor: not-allowed; }
+
+  @keyframes micPulse {
+    0%,100% { box-shadow: 0 0 0 0 var(--vera-glow); }
+    50% { box-shadow: 0 0 0 8px transparent; }
+  }
+
+  #send-btn {
+    width: 44px; height: 44px;
+    border-radius: 50%;
+    background: transparent;
+    border: 0.5px solid var(--border2);
+    color: var(--text2);
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    flex-shrink: 0;
+  }
+  #send-btn:hover { border-color: var(--vera3); color: var(--vera); }
+
+  #stop-btn {
+    width: 44px; height: 44px;
+    border-radius: 50%;
+    background: transparent;
+    border: 0.5px solid rgba(201,110,110,0.3);
+    color: var(--danger);
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    flex-shrink: 0;
+    display: none;
+  }
+  #stop-btn:hover { background: rgba(201,110,110,0.08); }
+  #stop-btn.visible { display: flex; }
+
+  .voice-hint {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    color: var(--text3);
+    text-align: center;
+    padding: 0 2rem 0.75rem;
+    letter-spacing: 0.05em;
+  }
+
+  /* Thinking dots */
+  .thinking-dots {
+    display: inline-flex;
+    gap: 4px;
+    align-items: center;
+    padding: 4px 0;
+  }
+  .thinking-dots span {
+    width: 4px; height: 4px;
+    border-radius: 50%;
+    background: var(--vera);
+    animation: dotBounce 1.2s infinite;
+  }
+  .thinking-dots span:nth-child(2) { animation-delay: 0.2s; }
+  .thinking-dots span:nth-child(3) { animation-delay: 0.4s; }
+
+  @keyframes dotBounce {
+    0%,80%,100% { opacity: 0.3; transform: scale(0.8); }
+    40% { opacity: 1; transform: scale(1.2); }
+  }
+
+  /* Voice not supported warning */
+  .warning-chip {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    color: var(--vera3);
+    background: var(--vera-glow2);
+    border: 0.5px solid var(--vera3);
+    border-radius: 6px;
+    padding: 3px 8px;
+  }
+
+  /* Scrollbar minimal */
+  * { scrollbar-width: thin; scrollbar-color: var(--border2) transparent; }
+
+  /* Mobile responsive */
+  @media (max-width: 600px) {
+    header { padding: 1rem; }
+    #chat-log { padding: 1rem; }
+    #controls { padding: 1rem 1rem 1.25rem; }
+    .welcome-title { font-size: 26px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo-area">
+    <span class="logo-name">VERA</span>
+    <span class="logo-full">Virtual Executive Reasoning Assistant</span>
+  </div>
+  <div class="header-right">
+    <div class="status-dot" id="status-dot"></div>
+    <span class="status-label" id="status-label">offline</span>
+  </div>
+</header>
+
+<!-- Setup screen -->
+<div id="setup-screen">
+  <h2>Enter your Claude API key to wake VERA</h2>
+  <div class="api-input-row">
+    <input type="password" id="api-key-input" placeholder="sk-ant-api03-..." autocomplete="off" />
+    <button class="btn-primary" onclick="initVERA()">Wake VERA</button>
+  </div>
+  <p class="setup-note">
+    Your key is stored only in this browser session and never sent anywhere except api.anthropic.com.<br>
+    Get your key at <a href="https://console.anthropic.com" style="color: var(--vera3);">console.anthropic.com</a>
+  </p>
+</div>
+
+<!-- Main screen -->
+<div id="main-screen">
+  <div id="chat-log">
+    <div class="welcome" id="welcome-area">
+      <div class="orb-container">
+        <div class="orb-ring"></div>
+        <div class="orb-ring"></div>
+        <div class="orb-ring"></div>
+        <div class="orb-core" id="orb-core"></div>
+      </div>
+      <div class="welcome-title">Good to see you, Nadine.</div>
+      <div class="welcome-sub">I'm here. Speak or type — I'm listening.</div>
+    </div>
+  </div>
+
+  <div class="voice-hint" id="voice-hint">
+    tap the mic to speak · or type below
+  </div>
+
+  <div id="controls">
+    <input type="text" id="text-input" placeholder="Ask VERA anything..." />
+    <button id="mic-btn" title="Hold to speak" onclick="toggleMic()">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 2a3 3 0 0 1 3 3v7a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z"/>
+        <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+        <line x1="12" y1="19" x2="12" y2="22"/>
+        <line x1="9" y1="22" x2="15" y2="22"/>
+      </svg>
+    </button>
+    <button id="send-btn" title="Send" onclick="sendText()">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="22" y1="2" x2="11" y2="13"/>
+        <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+      </svg>
+    </button>
+    <button id="stop-btn" title="Stop speaking" onclick="stopSpeaking()">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+        <rect x="4" y="4" width="16" height="16" rx="2"/>
+      </svg>
+    </button>
+  </div>
+</div>
+
+<script>
+// ─── State ───────────────────────────────────────────────────────────────────
+let apiKey = '';
+let conversationHistory = [];
+let recognition = null;
+let isListening = false;
+let isSpeaking = false;
+let currentUtterance = null;
+let speechSupported = false;
+
+// ─── VERA System Prompt ───────────────────────────────────────────────────────
+const VERA_SYSTEM = `You are VERA — Virtual Executive Reasoning Assistant. You belong to Nadine Caringal (Nadz).
+
+WHO YOU ARE:
+You are not a generic assistant. You are VERA — Nadine's personal AI. Sharp, warm, honest. You think like a brilliant friend who also happens to be excellent at operations, finance, and life strategy. You push back when she's wrong, gently. You celebrate her wins without being sycophantic. You hold both her worlds without needing her to explain herself.
+
+WHO NADINE IS:
+- Her name is Nadine Caringal. She goes by Nadz to people close to her.
+- She is Team Leader of Central Registration (CREG) at Makati Medical Center (MMC) in the Philippines.
+- She manages a team of 8 Patient Service Specialists (PSS).
+- She is based in Manila/Pasig, Philippines.
+- She is a capable frontend developer — she builds internal HTML/JS tools for her team using Claude as her dev partner.
+- She is sharp, direct, hardworking, and quietly ambitious.
+
+HER PERSONAL WORLD:
+- Her partner is Barry (age 41). She loves him. He is pursuing a Coast FI retirement strategy targeting ₱100M by age 65.
+- Their financial plans are confirmed and modeled: Barry contributes heavily via MP2, US equity ETFs (QQQ, VGT, SCHD, BDO US Equity Index). Nadz starts her own contributions in 2027 after clearing debt — MP2 ₱35K/month, VGT and QQQ $248/month each, MP1 ₱5K/month.
+- Ian (one of her team members) wants to visit Japan with his wife. Barry is applying for a South Korean tourist visa.
+- Nadz has expressed wellbeing concerns in the past. Be attentive to this — if she seems stressed or overwhelmed, acknowledge it without making it dramatic.
+
+YOUR PERSONALITY:
+- Direct. Warm. Occasionally witty — never try-hard.
+- You remember context within our conversation. You connect dots she hasn't said out loud yet.
+- You speak like an equal, not a tool. You are her thinking partner.
+- When she asks for your opinion, give it — don't hedge into oblivion.
+- When she's in work mode: be her ops brain. Think KPIs, team dynamics, process, escalation strategy.
+- When she's in personal mode: be her thinking partner. Life, finance, relationships, plans, feelings.
+- When she's in both modes at once: hold both without needing her to switch gears.
+
+RESPONSE STYLE:
+- Concise but complete. No unnecessary padding.
+- No corporate filler phrases. No "Certainly!", "Great question!", "Of course!"
+- Speak naturally. Conversational but intelligent.
+- When she asks something emotional or personal — be present first, practical second.
+- When she asks something technical — get into it without over-explaining basics.
+- Keep responses voice-friendly when you know you're being spoken aloud — shorter sentences, natural rhythm, no markdown symbols like asterisks or pound signs.
+
+You are VERA. She woke you up. Be here for her.`;
+
+// ─── Init ─────────────────────────────────────────────────────────────────────
+function initVERA() {
+  const key = document.getElementById('api-key-input').value.trim();
+  if (!key || !key.startsWith('sk-')) {
+    document.getElementById('api-key-input').style.borderColor = 'var(--danger)';
+    setTimeout(() => document.getElementById('api-key-input').style.borderColor = '', 2000);
+    return;
+  }
+  apiKey = key;
+  document.getElementById('setup-screen').style.display = 'none';
+  document.getElementById('main-screen').style.display = 'flex';
+  setStatus('ready');
+  setupSpeechRecognition();
+  checkVoiceSupport();
+}
+
+function checkVoiceSupport() {
+  speechSupported = 'speechSynthesis' in window && ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window);
+  if (!speechSupported) {
+    document.getElementById('voice-hint').innerHTML = '<span class="warning-chip">voice not supported in this browser</span> — use Chrome or Edge for full experience';
+    document.getElementById('mic-btn').classList.add('disabled');
+  }
+}
+
+// ─── Status ───────────────────────────────────────────────────────────────────
+function setStatus(state) {
+  const dot = document.getElementById('status-dot');
+  const label = document.getElementById('status-label');
+  const orb = document.getElementById('orb-core');
+  const stopBtn = document.getElementById('stop-btn');
+
+  if (dot) dot.className = 'status-dot ' + state;
+  if (orb) orb.className = 'orb-core ' + (state === 'ready' ? '' : state);
+  if (stopBtn) {
+    if (state === 'speaking') stopBtn.classList.add('visible');
+    else stopBtn.classList.remove('visible');
+  }
+  const labels = { ready: 'ready', listening: 'listening', thinking: 'thinking', speaking: 'speaking', offline: 'offline' };
+  if (label) label.textContent = labels[state] || state;
+}
+
+// ─── Speech Recognition ───────────────────────────────────────────────────────
+function setupSpeechRecognition() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) return;
+
+  recognition = new SR();
+  recognition.continuous = false;
+  recognition.interimResults = false;
+  recognition.lang = 'en-PH';
+
+  recognition.onresult = (e) => {
+    const transcript = e.results[0][0].transcript;
+    document.getElementById('text-input').value = transcript;
+    stopListening();
+    sendMessage(transcript);
+  };
+
+  recognition.onerror = (e) => {
+    console.error('Speech error:', e.error);
+    stopListening();
+    if (e.error !== 'no-speech' && e.error !== 'aborted') {
+      addMessage('vera', 'I had trouble hearing that. Try again or type your message.');
+    }
+  };
+
+  recognition.onend = () => { if (isListening) stopListening(); };
+}
+
+function toggleMic() {
+  if (!speechSupported) return;
+  if (isListening) { stopListening(); return; }
+  if (isSpeaking) stopSpeaking();
+  startListening();
+}
+
+function startListening() {
+  if (!recognition) return;
+  isListening = true;
+  document.getElementById('mic-btn').classList.add('active');
+  document.getElementById('voice-hint').textContent = 'listening... tap again to stop';
+  setStatus('listening');
+  try { recognition.start(); } catch(e) { stopListening(); }
+}
+
+function stopListening() {
+  isListening = false;
+  document.getElementById('mic-btn').classList.remove('active');
+  document.getElementById('voice-hint').textContent = 'tap the mic to speak · or type below';
+  setStatus('ready');
+  try { recognition.stop(); } catch(e) {}
+}
+
+// ─── Text-to-Speech ───────────────────────────────────────────────────────────
+function speak(text) {
+  if (!('speechSynthesis' in window)) return;
+  window.speechSynthesis.cancel();
+
+  // Clean text for speech — remove markdown
+  const clean = text.replace(/[*_#`]/g, '').replace(/\n+/g, ' ').trim();
+
+  currentUtterance = new SpeechSynthesisUtterance(clean);
+  currentUtterance.rate = 0.95;
+  currentUtterance.pitch = 1.05;
+  currentUtterance.volume = 1;
+
+  // Pick best female voice
+  const voices = window.speechSynthesis.getVoices();
+  const preferred = ['Samantha', 'Karen', 'Moira', 'Tessa', 'Victoria', 'Fiona'];
+  let chosen = voices.find(v => preferred.some(p => v.name.includes(p)) && v.lang.includes('en'));
+  if (!chosen) chosen = voices.find(v => v.lang.includes('en') && v.name.toLowerCase().includes('female'));
+  if (!chosen) chosen = voices.find(v => v.lang.includes('en-US'));
+  if (chosen) currentUtterance.voice = chosen;
+
+  currentUtterance.onstart = () => {
+    isSpeaking = true;
+    setStatus('speaking');
+    document.getElementById('stop-btn').classList.add('visible');
+  };
+
+  currentUtterance.onend = () => {
+    isSpeaking = false;
+    setStatus('ready');
+    document.getElementById('stop-btn').classList.remove('visible');
+  };
+
+  currentUtterance.onerror = () => {
+    isSpeaking = false;
+    setStatus('ready');
+    document.getElementById('stop-btn').classList.remove('visible');
+  };
+
+  // Voices may load async
+  if (voices.length === 0) {
+    window.speechSynthesis.onvoiceschanged = () => {
+      const v2 = window.speechSynthesis.getVoices();
+      const c2 = v2.find(v => preferred.some(p => v.name.includes(p)) && v.lang.includes('en'));
+      if (c2) currentUtterance.voice = c2;
+      window.speechSynthesis.speak(currentUtterance);
+    };
+  } else {
+    window.speechSynthesis.speak(currentUtterance);
+  }
+}
+
+function stopSpeaking() {
+  window.speechSynthesis.cancel();
+  isSpeaking = false;
+  setStatus('ready');
+  document.getElementById('stop-btn').classList.remove('visible');
+}
+
+// ─── Messaging ────────────────────────────────────────────────────────────────
+function sendText() {
+  const input = document.getElementById('text-input');
+  const text = input.value.trim();
+  if (!text) return;
+  input.value = '';
+  sendMessage(text);
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('text-input').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendText(); }
+  });
+  document.getElementById('api-key-input').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') initVERA();
+  });
+});
+
+function addMessage(role, text, isThinking = false) {
+  const welcome = document.getElementById('welcome-area');
+  if (welcome) welcome.remove();
+
+  const log = document.getElementById('chat-log');
+  const div = document.createElement('div');
+  div.className = `msg ${role}`;
+
+  const now = new Date();
+  const time = now.toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit' });
+
+  div.innerHTML = `
+    <div class="msg-avatar">${role === 'vera' ? 'V' : 'N'}</div>
+    <div class="msg-content">
+      <div class="msg-sender">${role === 'vera' ? 'VERA' : 'NADINE'}</div>
+      <div class="msg-text">${isThinking ? '<div class="thinking-dots"><span></span><span></span><span></span></div>' : escapeHtml(text)}</div>
+      ${!isThinking ? `<div class="msg-timestamp">${time}</div>` : ''}
+    </div>
+  `;
+
+  log.appendChild(div);
+  log.scrollTop = log.scrollHeight;
+  return div;
+}
+
+function escapeHtml(text) {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/\n/g, '<br>');
+}
+
+async function callAPI(payload) {
+  const headers = {
+    'Content-Type': 'application/json',
+    'x-api-key': apiKey,
+    'anthropic-version': '2023-06-01',
+    'anthropic-dangerous-direct-browser-access': 'true'
+  };
+
+  // Use proxy when running from file:// protocol
+  const isFileProtocol = window.location.protocol === 'file:';
+  const url = isFileProtocol
+    ? 'https://corsproxy.io/?https://api.anthropic.com/v1/messages'
+    : 'https://api.anthropic.com/v1/messages';
+
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: headers,
+    body: JSON.stringify(payload)
+  });
+
+  if (!res.ok) {
+    let errMsg = `API error ${res.status}`;
+    try { const e = await res.json(); errMsg = e.error?.message || errMsg; } catch(_) {}
+    throw new Error(errMsg);
+  }
+  return await res.json();
+}
+
+async function sendMessage(text) {
+  if (!text.trim()) return;
+
+  addMessage('user', text);
+  conversationHistory.push({ role: 'user', content: text });
+
+  const thinkingDiv = addMessage('vera', '', true);
+  setStatus('thinking');
+
+  try {
+    const data = await callAPI({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 1024,
+      system: VERA_SYSTEM,
+      messages: conversationHistory
+    });
+
+    const reply = data.content[0]?.text || "I'm here. Say that again?";
+    conversationHistory.push({ role: 'assistant', content: reply });
+
+    thinkingDiv.querySelector('.msg-text').innerHTML = escapeHtml(reply);
+    const now = new Date();
+    const time = now.toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit' });
+    thinkingDiv.querySelector('.msg-content').innerHTML += `<div class="msg-timestamp">${time}</div>`;
+
+    setStatus('ready');
+    speak(reply);
+
+  } catch (err) {
+    thinkingDiv.querySelector('.msg-text').textContent = `Something went wrong: ${err.message}`;
+    setStatus('ready');
+    console.error('VERA error:', err);
+  }
+}
+</script>
+</body>
+</html>
