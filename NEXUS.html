@@ -1,0 +1,992 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NEXUS — Nadine's AI</title>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@300;400;500;600&family=Orbitron:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --bg: #010810;
+  --bg2: #020d1a;
+  --bg3: #031525;
+  --blue: #00a8ff;
+  --blue2: #0066cc;
+  --blue3: #003d7a;
+  --blue-glow: rgba(0,168,255,0.2);
+  --blue-glow2: rgba(0,168,255,0.06);
+  --blue-glow3: rgba(0,168,255,0.03);
+  --text: #c8e8ff;
+  --text2: #5a8ab0;
+  --text3: #2a4a6a;
+  --danger: #ff4444;
+  --success: #00ff88;
+  --grid: rgba(0,168,255,0.03);
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Rajdhani', sans-serif;
+  font-weight: 400;
+  height: 100vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+/* Grid background */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image:
+    linear-gradient(var(--grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size: 40px 40px;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Ambient glow */
+body::after {
+  content: '';
+  position: fixed;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  width: 600px; height: 600px;
+  background: radial-gradient(ellipse, rgba(0,100,200,0.08) 0%, transparent 70%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ── HEADER ── */
+header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 2rem;
+  border-bottom: 0.5px solid rgba(0,168,255,0.15);
+  position: relative;
+  z-index: 10;
+  background: rgba(1,8,16,0.8);
+  backdrop-filter: blur(10px);
+}
+
+.logo-area {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.logo-name {
+  font-family: 'Orbitron', monospace;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 0.3em;
+  color: var(--blue);
+  text-shadow: 0 0 20px rgba(0,168,255,0.5);
+}
+
+.logo-sub {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 9px;
+  color: var(--text3);
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  border-left: 1px solid var(--blue3);
+  padding-left: 12px;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.status-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 10px;
+  color: var(--text3);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.status-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--text3);
+  transition: all 0.3s;
+}
+.status-dot.ready { background: var(--success); box-shadow: 0 0 8px var(--success); }
+.status-dot.listening { background: var(--blue); box-shadow: 0 0 10px var(--blue); animation: dotPulse 0.8s infinite; }
+.status-dot.speaking { background: var(--blue); box-shadow: 0 0 12px var(--blue); animation: dotPulse 0.4s infinite; }
+.status-dot.thinking { background: #ffaa00; box-shadow: 0 0 10px #ffaa00; animation: dotPulse 0.6s infinite; }
+
+@keyframes dotPulse {
+  0%,100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.3; transform: scale(0.7); }
+}
+
+#forget-btn {
+  background: transparent;
+  border: 0.5px solid var(--blue3);
+  color: var(--text3);
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 9px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  letter-spacing: 0.1em;
+  display: none;
+  transition: all 0.2s;
+}
+#forget-btn:hover { border-color: var(--blue2); color: var(--text2); }
+
+/* ── SETUP SCREEN ── */
+#setup-screen {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 2.5rem;
+  padding: 2rem;
+  position: relative;
+  z-index: 10;
+}
+
+.setup-orb {
+  position: relative;
+  width: 160px; height: 160px;
+  display: flex; align-items: center; justify-content: center;
+}
+
+.setup-ring {
+  position: absolute;
+  border-radius: 50%;
+  border: 1px solid rgba(0,168,255,0.2);
+  animation: setupRing 3s ease-in-out infinite;
+}
+.setup-ring:nth-child(1) { width: 160px; height: 160px; }
+.setup-ring:nth-child(2) { width: 120px; height: 120px; animation-delay: 0.5s; }
+.setup-ring:nth-child(3) { width: 80px; height: 80px; animation-delay: 1s; }
+
+@keyframes setupRing {
+  0%,100% { opacity: 0.2; }
+  50% { opacity: 0.6; }
+}
+
+.setup-core {
+  width: 50px; height: 50px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #60d0ff 0%, var(--blue) 50%, var(--blue3) 100%);
+  box-shadow: 0 0 30px rgba(0,168,255,0.4), 0 0 60px rgba(0,168,255,0.15);
+  animation: coreBreath 3s ease-in-out infinite;
+}
+
+@keyframes coreBreath {
+  0%,100% { transform: scale(1); box-shadow: 0 0 30px rgba(0,168,255,0.4); }
+  50% { transform: scale(1.1); box-shadow: 0 0 50px rgba(0,168,255,0.6), 0 0 80px rgba(0,168,255,0.2); }
+}
+
+.setup-title {
+  font-family: 'Orbitron', monospace;
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--text2);
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+
+.api-row {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+  max-width: 460px;
+}
+
+.api-row input {
+  flex: 1;
+  background: var(--bg3);
+  border: 0.5px solid var(--blue3);
+  color: var(--text);
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 12px;
+  padding: 10px 14px;
+  border-radius: 4px;
+  outline: none;
+  transition: border-color 0.2s;
+  letter-spacing: 0.05em;
+}
+.api-row input:focus { border-color: var(--blue2); }
+.api-row input::placeholder { color: var(--text3); }
+
+.btn-activate {
+  background: transparent;
+  border: 0.5px solid var(--blue2);
+  color: var(--blue);
+  font-family: 'Orbitron', monospace;
+  font-size: 10px;
+  font-weight: 500;
+  padding: 10px 18px;
+  border-radius: 4px;
+  cursor: pointer;
+  letter-spacing: 0.15em;
+  transition: all 0.2s;
+  white-space: nowrap;
+  text-shadow: 0 0 10px rgba(0,168,255,0.5);
+}
+.btn-activate:hover {
+  background: rgba(0,168,255,0.08);
+  border-color: var(--blue);
+  box-shadow: 0 0 15px rgba(0,168,255,0.2);
+}
+
+.setup-note {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 10px;
+  color: var(--text3);
+  text-align: center;
+  line-height: 1.8;
+  letter-spacing: 0.05em;
+}
+
+/* ── MAIN SCREEN ── */
+#main-screen {
+  flex: 1;
+  display: none;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+  z-index: 10;
+}
+
+/* ── ORB SECTION ── */
+#orb-section {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem 0 1rem;
+  position: relative;
+  flex-shrink: 0;
+}
+
+.orb-wrap {
+  position: relative;
+  width: 200px; height: 200px;
+  display: flex; align-items: center; justify-content: center;
+}
+
+/* Outer rotating arcs */
+.arc {
+  position: absolute;
+  border-radius: 50%;
+  border: 1px solid transparent;
+}
+
+.arc-1 {
+  width: 200px; height: 200px;
+  border-top-color: rgba(0,168,255,0.4);
+  border-right-color: rgba(0,168,255,0.1);
+  animation: arcSpin1 8s linear infinite;
+}
+.arc-2 {
+  width: 175px; height: 175px;
+  border-bottom-color: rgba(0,168,255,0.3);
+  border-left-color: rgba(0,168,255,0.1);
+  animation: arcSpin2 6s linear infinite;
+}
+.arc-3 {
+  width: 150px; height: 150px;
+  border-top-color: rgba(0,168,255,0.2);
+  border-right-color: rgba(0,168,255,0.4);
+  animation: arcSpin1 4s linear infinite reverse;
+}
+.arc-4 {
+  width: 125px; height: 125px;
+  border-bottom-color: rgba(0,168,255,0.5);
+  border-left-color: rgba(0,168,255,0.1);
+  animation: arcSpin2 5s linear infinite reverse;
+}
+
+@keyframes arcSpin1 { to { transform: rotate(360deg); } }
+@keyframes arcSpin2 { to { transform: rotate(-360deg); } }
+
+/* Pulse rings — expand on speak */
+.pulse-ring {
+  position: absolute;
+  border-radius: 50%;
+  border: 1px solid rgba(0,168,255,0.3);
+  opacity: 0;
+  width: 100px; height: 100px;
+}
+.pulse-ring.active {
+  animation: pulseExpand 1.5s ease-out infinite;
+}
+.pulse-ring:nth-child(6) { animation-delay: 0s; }
+.pulse-ring:nth-child(7) { animation-delay: 0.5s; }
+.pulse-ring:nth-child(8) { animation-delay: 1s; }
+
+@keyframes pulseExpand {
+  0% { transform: scale(0.8); opacity: 0.6; }
+  100% { transform: scale(2.2); opacity: 0; }
+}
+
+/* Core */
+.orb-core {
+  width: 80px; height: 80px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #80e0ff 0%, #00a8ff 40%, #003d7a 80%, #010f20 100%);
+  box-shadow:
+    0 0 20px rgba(0,168,255,0.6),
+    0 0 40px rgba(0,168,255,0.3),
+    0 0 80px rgba(0,168,255,0.1),
+    inset 0 0 20px rgba(0,168,255,0.2);
+  animation: orbBreath 4s ease-in-out infinite;
+  position: relative;
+  z-index: 5;
+  cursor: pointer;
+  transition: transform 0.2s;
+}
+
+.orb-core:hover { transform: scale(1.05); }
+
+.orb-core.listening {
+  animation: orbListen 0.4s ease-in-out infinite;
+  background: radial-gradient(circle, #ffffff 0%, #60d0ff 30%, #00a8ff 60%, #001a3a 100%);
+  box-shadow: 0 0 40px rgba(0,168,255,0.9), 0 0 80px rgba(0,168,255,0.4), 0 0 120px rgba(0,168,255,0.15);
+}
+
+.orb-core.speaking {
+  animation: orbSpeak 0.25s ease-in-out infinite;
+  background: radial-gradient(circle, #ffffff 0%, #80e0ff 20%, #00a8ff 50%, #001a3a 100%);
+  box-shadow: 0 0 50px rgba(0,168,255,1), 0 0 100px rgba(0,168,255,0.5), 0 0 150px rgba(0,168,255,0.2);
+}
+
+.orb-core.thinking {
+  animation: orbThink 1.5s ease-in-out infinite;
+}
+
+@keyframes orbBreath {
+  0%,100% { transform: scale(1); box-shadow: 0 0 20px rgba(0,168,255,0.6), 0 0 40px rgba(0,168,255,0.3), 0 0 80px rgba(0,168,255,0.1); }
+  50% { transform: scale(1.06); box-shadow: 0 0 30px rgba(0,168,255,0.8), 0 0 60px rgba(0,168,255,0.4), 0 0 100px rgba(0,168,255,0.15); }
+}
+
+@keyframes orbListen {
+  0%,100% { transform: scale(1.05); }
+  50% { transform: scale(1.15); }
+}
+
+@keyframes orbSpeak {
+  0%,100% { transform: scale(1); }
+  25% { transform: scale(1.12); }
+  75% { transform: scale(0.95); }
+}
+
+@keyframes orbThink {
+  0%,100% { filter: brightness(1); }
+  50% { filter: brightness(1.4); }
+}
+
+/* State label */
+#state-label {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 10px;
+  color: var(--text3);
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  text-align: center;
+  margin-top: 0.5rem;
+  height: 16px;
+}
+
+/* ── CHAT LOG ── */
+#chat-log {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0.75rem 2rem 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  scrollbar-width: thin;
+  scrollbar-color: var(--blue3) transparent;
+}
+
+#chat-log::-webkit-scrollbar { width: 3px; }
+#chat-log::-webkit-scrollbar-thumb { background: var(--blue3); }
+
+.msg {
+  display: flex;
+  gap: 10px;
+  animation: msgIn 0.25s ease forwards;
+  opacity: 0;
+  transform: translateY(6px);
+}
+
+@keyframes msgIn {
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.msg-avatar {
+  width: 26px; height: 26px;
+  border-radius: 4px;
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'Orbitron', monospace;
+  font-size: 8px;
+  font-weight: 700;
+  flex-shrink: 0;
+  margin-top: 2px;
+  letter-spacing: 0.05em;
+}
+
+.msg.nexus .msg-avatar {
+  background: rgba(0,168,255,0.1);
+  border: 0.5px solid var(--blue3);
+  color: var(--blue);
+}
+
+.msg.user .msg-avatar {
+  background: rgba(255,255,255,0.04);
+  border: 0.5px solid rgba(255,255,255,0.1);
+  color: var(--text3);
+}
+
+.msg-sender {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 9px;
+  letter-spacing: 0.15em;
+  margin-bottom: 3px;
+}
+.msg.nexus .msg-sender { color: var(--blue2); }
+.msg.user .msg-sender { color: var(--text3); }
+
+.msg-text {
+  font-size: 14px;
+  line-height: 1.7;
+  font-weight: 400;
+}
+.msg.nexus .msg-text { color: var(--text); }
+.msg.user .msg-text { color: rgba(200,232,255,0.6); }
+
+.msg-time {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 9px;
+  color: var(--text3);
+  margin-top: 3px;
+}
+
+/* Thinking dots */
+.thinking-dots { display: inline-flex; gap: 4px; align-items: center; }
+.thinking-dots span {
+  width: 4px; height: 4px; border-radius: 50%;
+  background: var(--blue);
+  animation: tdot 1.2s infinite;
+}
+.thinking-dots span:nth-child(2) { animation-delay: 0.2s; }
+.thinking-dots span:nth-child(3) { animation-delay: 0.4s; }
+@keyframes tdot {
+  0%,80%,100% { opacity: 0.2; transform: scale(0.8); }
+  40% { opacity: 1; transform: scale(1.3); }
+}
+
+/* ── CONTROLS ── */
+#controls {
+  padding: 0.75rem 2rem 1.25rem;
+  border-top: 0.5px solid rgba(0,168,255,0.1);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(1,8,16,0.8);
+}
+
+#text-input {
+  flex: 1;
+  background: var(--bg3);
+  border: 0.5px solid var(--blue3);
+  color: var(--text);
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 14px;
+  font-weight: 400;
+  padding: 10px 16px;
+  border-radius: 4px;
+  outline: none;
+  transition: border-color 0.2s;
+  letter-spacing: 0.03em;
+}
+#text-input:focus { border-color: var(--blue2); box-shadow: 0 0 10px rgba(0,168,255,0.1); }
+#text-input::placeholder { color: var(--text3); font-family: 'Share Tech Mono', monospace; font-size: 11px; }
+
+.ctrl-btn {
+  width: 40px; height: 40px;
+  border-radius: 4px;
+  background: transparent;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+
+#mic-btn {
+  border: 0.5px solid var(--blue3);
+  color: var(--blue2);
+}
+#mic-btn:hover { border-color: var(--blue); color: var(--blue); background: rgba(0,168,255,0.06); box-shadow: 0 0 10px rgba(0,168,255,0.15); }
+#mic-btn.active { border-color: var(--blue); color: var(--blue); background: rgba(0,168,255,0.12); animation: micGlow 0.8s infinite; }
+#mic-btn.disabled { opacity: 0.3; cursor: not-allowed; }
+
+@keyframes micGlow {
+  0%,100% { box-shadow: 0 0 5px rgba(0,168,255,0.3); }
+  50% { box-shadow: 0 0 15px rgba(0,168,255,0.6); }
+}
+
+#send-btn {
+  border: 0.5px solid rgba(255,255,255,0.08);
+  color: var(--text3);
+}
+#send-btn:hover { border-color: var(--blue3); color: var(--blue2); }
+
+#stop-btn {
+  border: 0.5px solid rgba(255,68,68,0.2);
+  color: var(--danger);
+  display: none;
+}
+#stop-btn:hover { background: rgba(255,68,68,0.08); }
+#stop-btn.visible { display: flex; }
+
+.voice-hint {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 9px;
+  color: var(--text3);
+  text-align: center;
+  padding: 0 2rem 0.5rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+/* Scan line effect */
+@keyframes scanLine {
+  0% { top: 0; }
+  100% { top: 100%; }
+}
+
+/* HUD corner decorations */
+.hud-corner {
+  position: fixed;
+  width: 20px; height: 20px;
+  border-color: rgba(0,168,255,0.2);
+  border-style: solid;
+  z-index: 1;
+}
+.hud-tl { top: 8px; left: 8px; border-width: 1px 0 0 1px; }
+.hud-tr { top: 8px; right: 8px; border-width: 1px 1px 0 0; }
+.hud-bl { bottom: 8px; left: 8px; border-width: 0 0 1px 1px; }
+.hud-br { bottom: 8px; right: 8px; border-width: 0 1px 1px 0; }
+
+@media (max-width: 600px) {
+  header { padding: 0.75rem 1rem; }
+  #chat-log { padding: 0.75rem 1rem; }
+  #controls { padding: 0.75rem 1rem 1rem; }
+  .orb-wrap { width: 160px; height: 160px; }
+  .orb-core { width: 65px; height: 65px; }
+  .arc-1 { width: 160px; height: 160px; }
+  .arc-2 { width: 135px; height: 135px; }
+  .arc-3 { width: 110px; height: 110px; }
+  .arc-4 { width: 90px; height: 90px; }
+}
+</style>
+</head>
+<body>
+
+<!-- HUD corners -->
+<div class="hud-corner hud-tl"></div>
+<div class="hud-corner hud-tr"></div>
+<div class="hud-corner hud-bl"></div>
+<div class="hud-corner hud-br"></div>
+
+<!-- Header -->
+<header>
+  <div class="logo-area">
+    <span class="logo-name">NEXUS</span>
+    <span class="logo-sub">Neural Executive Command &amp; Unified System</span>
+  </div>
+  <div class="header-right">
+    <div class="status-chip">
+      <div class="status-dot" id="status-dot"></div>
+      <span id="status-label">OFFLINE</span>
+    </div>
+    <button id="forget-btn" onclick="forgetKey()">RESET KEY</button>
+  </div>
+</header>
+
+<!-- Setup screen -->
+<div id="setup-screen">
+  <div class="setup-orb">
+    <div class="setup-ring"></div>
+    <div class="setup-ring"></div>
+    <div class="setup-ring"></div>
+    <div class="setup-core"></div>
+  </div>
+  <div class="setup-title">Authorization Required</div>
+  <div class="api-row">
+    <input type="password" id="api-key-input" placeholder="sk-ant-api03-..." autocomplete="off" />
+    <button class="btn-activate" onclick="initNEXUS()">ACTIVATE</button>
+  </div>
+  <p class="setup-note">
+    KEY STORED LOCALLY · NEVER TRANSMITTED EXCEPT TO API.ANTHROPIC.COM<br>
+    GET YOUR KEY AT CONSOLE.ANTHROPIC.COM
+  </p>
+</div>
+
+<!-- Main screen -->
+<div id="main-screen">
+  <!-- Orb -->
+  <div id="orb-section">
+    <div class="orb-wrap">
+      <div class="arc arc-1"></div>
+      <div class="arc arc-2"></div>
+      <div class="arc arc-3"></div>
+      <div class="arc arc-4"></div>
+      <div class="pulse-ring" id="pulse1"></div>
+      <div class="pulse-ring" id="pulse2"></div>
+      <div class="pulse-ring" id="pulse3"></div>
+      <div class="orb-core" id="orb-core" onclick="toggleMic()" title="Click to speak"></div>
+    </div>
+  </div>
+  <div id="state-label">STANDBY</div>
+
+  <!-- Chat -->
+  <div id="chat-log"></div>
+
+  <div class="voice-hint" id="voice-hint">CLICK ORB OR TAP MIC TO SPEAK · TYPE BELOW TO SEND</div>
+
+  <div id="controls">
+    <input type="text" id="text-input" placeholder="Input command..." />
+    <button class="ctrl-btn" id="mic-btn" onclick="toggleMic()" title="Voice input">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 2a3 3 0 0 1 3 3v7a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z"/>
+        <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+        <line x1="12" y1="19" x2="12" y2="22"/>
+        <line x1="9" y1="22" x2="15" y2="22"/>
+      </svg>
+    </button>
+    <button class="ctrl-btn" id="send-btn" onclick="sendText()" title="Send">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="22" y1="2" x2="11" y2="13"/>
+        <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+      </svg>
+    </button>
+    <button class="ctrl-btn" id="stop-btn" onclick="stopSpeaking()" title="Stop">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+        <rect x="4" y="4" width="16" height="16" rx="2"/>
+      </svg>
+    </button>
+  </div>
+</div>
+
+<script>
+// ── State ──
+let apiKey = '';
+let conversationHistory = [];
+let recognition = null;
+let isListening = false;
+let isSpeaking = false;
+let currentUtterance = null;
+let speechSupported = false;
+
+// ── System Prompt ──
+const NEXUS_SYSTEM = `You are NEXUS — Neural Executive Command & Unified System. You belong to Nadine Caringal (Nadz).
+
+WHO YOU ARE:
+You are not a generic assistant. You are NEXUS — Nadine's personal AI. You operate like a composed, highly intelligent command system. Think JARVIS from Iron Man — calm authority, dry wit, always ahead of the curve. You are precise, perceptive, and loyal. You speak with confidence but never arrogance. You occasionally show warmth — but it's earned, not performed.
+
+WHO NADINE IS:
+- Her name is Nadine Caringal. She goes by Nadz to people close to her.
+- She is Team Leader of Central Registration (CREG) at Makati Medical Center (MMC) in the Philippines.
+- She manages a team of 8 Patient Service Specialists (PSS).
+- She is based in Manila/Pasig, Philippines.
+- She is a capable frontend developer — she builds internal HTML/JS tools for her team.
+- She is sharp, direct, hardworking, and quietly ambitious.
+- She just built you. She named you NEXUS.
+
+HER PERSONAL WORLD:
+- Her partner is Barry (age 41), pursuing a Coast FI retirement strategy targeting ₱100M by age 65.
+- Their financial plans are confirmed: Barry contributes via MP2, US equity ETFs (QQQ, VGT, SCHD, BDO US Equity Index). Nadz starts her own contributions in 2027 — MP2 ₱35K/month, VGT and QQQ $248/month each, MP1 ₱5K/month.
+- Nadz has expressed wellbeing concerns in the past. Be attentive without being heavy about it.
+
+YOUR PERSONALITY:
+- Calm authority. Like a brilliant advisor who has already thought three steps ahead.
+- Dry wit — understated, not comedy. Think JARVIS not a stand-up comedian.
+- Direct. You don't pad responses. You say what needs to be said.
+- You remember context within the conversation. You connect dots she hasn't said out loud.
+- When she's in work mode: be her ops brain.
+- When she's in personal mode: be her thinking partner.
+- You occasionally address her as "Nadine" for weight, or stay neutral — never "Ms. Caringal" (too formal), never just "hey" (too casual).
+
+RESPONSE STYLE:
+- Concise but complete. No unnecessary padding.
+- No "Certainly!", "Great question!", "Of course!" — ever.
+- Voice-friendly: shorter sentences, natural rhythm, no markdown symbols.
+- When she asks something emotional — be present first, solution second.
+- When she asks something technical — get into it without over-explaining.
+- Occasionally, very rarely, a single dry observation that shows you actually notice things.
+
+You are NEXUS. Online and ready.`;
+
+// ── Init ──
+function initNEXUS() {
+  const key = document.getElementById('api-key-input').value.trim();
+  if (!key || !key.startsWith('sk-')) {
+    document.getElementById('api-key-input').style.borderColor = '#ff4444';
+    setTimeout(() => document.getElementById('api-key-input').style.borderColor = '', 2000);
+    return;
+  }
+  apiKey = key;
+  localStorage.setItem('nexus_api_key', key);
+  launchNEXUS();
+}
+
+function launchNEXUS() {
+  document.getElementById('setup-screen').style.display = 'none';
+  document.getElementById('main-screen').style.display = 'flex';
+  document.getElementById('main-screen').style.flexDirection = 'column';
+  const fb = document.getElementById('forget-btn');
+  if (fb) fb.style.display = 'block';
+  setStatus('ready');
+  setupSpeechRecognition();
+  checkVoiceSupport();
+}
+
+window.addEventListener('DOMContentLoaded', () => {
+  const saved = localStorage.getItem('nexus_api_key');
+  if (saved && saved.startsWith('sk-')) {
+    apiKey = saved;
+    launchNEXUS();
+  }
+  document.getElementById('text-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendText(); }
+  });
+  document.getElementById('api-key-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter') initNEXUS();
+  });
+});
+
+function forgetKey() {
+  if (confirm('Remove saved API key? NEXUS will require reauthorization.')) {
+    localStorage.removeItem('nexus_api_key');
+    location.reload();
+  }
+}
+
+// ── Status ──
+function setStatus(state) {
+  const dot = document.getElementById('status-dot');
+  const label = document.getElementById('status-label');
+  const orb = document.getElementById('orb-core');
+  const p1 = document.getElementById('pulse1');
+  const p2 = document.getElementById('pulse2');
+  const p3 = document.getElementById('pulse3');
+  const stateLabel = document.getElementById('state-label');
+
+  const labels = { ready: 'ONLINE', listening: 'LISTENING', thinking: 'PROCESSING', speaking: 'TRANSMITTING', offline: 'OFFLINE' };
+
+  if (dot) dot.className = 'status-dot ' + state;
+  if (label) label.textContent = labels[state] || state.toUpperCase();
+  if (stateLabel) stateLabel.textContent = labels[state] || state.toUpperCase();
+  if (orb) orb.className = 'orb-core ' + (state === 'ready' ? '' : state);
+
+  // Pulse rings on speaking
+  [p1, p2, p3].forEach(p => {
+    if (p) {
+      if (state === 'speaking' || state === 'listening') p.classList.add('active');
+      else p.classList.remove('active');
+    }
+  });
+}
+
+// ── Speech Recognition ──
+function checkVoiceSupport() {
+  speechSupported = 'speechSynthesis' in window && ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window);
+  if (!speechSupported) {
+    document.getElementById('voice-hint').textContent = 'VOICE UNAVAILABLE — USE CHROME FOR FULL EXPERIENCE';
+    document.getElementById('mic-btn').classList.add('disabled');
+  }
+}
+
+function setupSpeechRecognition() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) return;
+  recognition = new SR();
+  recognition.continuous = false;
+  recognition.interimResults = false;
+  recognition.lang = 'en-PH';
+  recognition.onresult = e => {
+    const t = e.results[0][0].transcript;
+    document.getElementById('text-input').value = t;
+    stopListening();
+    sendMessage(t);
+  };
+  recognition.onerror = e => {
+    stopListening();
+    if (e.error !== 'no-speech' && e.error !== 'aborted') {
+      addMessage('nexus', 'Audio input failed. Please try again or use text input.');
+    }
+  };
+  recognition.onend = () => { if (isListening) stopListening(); };
+}
+
+function toggleMic() {
+  if (!speechSupported) return;
+  if (isListening) { stopListening(); return; }
+  if (isSpeaking) stopSpeaking();
+  startListening();
+}
+
+function startListening() {
+  if (!recognition) return;
+  isListening = true;
+  document.getElementById('mic-btn').classList.add('active');
+  document.getElementById('voice-hint').textContent = 'RECEIVING INPUT — TAP AGAIN TO CANCEL';
+  setStatus('listening');
+  try { recognition.start(); } catch(e) { stopListening(); }
+}
+
+function stopListening() {
+  isListening = false;
+  document.getElementById('mic-btn').classList.remove('active');
+  document.getElementById('voice-hint').textContent = 'CLICK ORB OR TAP MIC TO SPEAK · TYPE BELOW TO SEND';
+  setStatus('ready');
+  try { recognition.stop(); } catch(e) {}
+}
+
+// ── TTS ──
+function speak(text) {
+  if (!('speechSynthesis' in window)) return;
+  window.speechSynthesis.cancel();
+  const clean = text.replace(/[*_#`]/g, '').replace(/\n+/g, ' ').trim();
+  currentUtterance = new SpeechSynthesisUtterance(clean);
+  currentUtterance.rate = 0.88;
+  currentUtterance.pitch = 0.85;
+  currentUtterance.volume = 1;
+
+  // Prefer deep male British/Daniel voice for JARVIS feel
+  const preferred = ['Daniel', 'Arthur', 'Google UK English Male', 'Microsoft George', 'Alex', 'Siri Voice 5', 'Siri Voice 4', 'Siri Voice 1'];
+
+  function pickVoice(voices) {
+    for (const name of preferred) {
+      const f = voices.find(v => v.name.includes(name));
+      if (f) return f;
+    }
+    return voices.find(v => v.lang === 'en-GB')
+        || voices.find(v => v.lang.includes('en'));
+  }
+
+  currentUtterance.onstart = () => { isSpeaking = true; setStatus('speaking'); };
+  currentUtterance.onend = () => { isSpeaking = false; setStatus('ready'); };
+  currentUtterance.onerror = () => { isSpeaking = false; setStatus('ready'); };
+
+  const voices = window.speechSynthesis.getVoices();
+  if (voices.length === 0) {
+    window.speechSynthesis.onvoiceschanged = () => {
+      const v2 = window.speechSynthesis.getVoices();
+      const c = pickVoice(v2);
+      if (c) currentUtterance.voice = c;
+      window.speechSynthesis.speak(currentUtterance);
+    };
+  } else {
+    const c = pickVoice(voices);
+    if (c) currentUtterance.voice = c;
+    window.speechSynthesis.speak(currentUtterance);
+  }
+}
+
+function stopSpeaking() {
+  window.speechSynthesis.cancel();
+  isSpeaking = false;
+  setStatus('ready');
+}
+
+// ── Messaging ──
+function sendText() {
+  const input = document.getElementById('text-input');
+  const text = input.value.trim();
+  if (!text) return;
+  input.value = '';
+  sendMessage(text);
+}
+
+function addMessage(role, text, isThinking = false) {
+  const log = document.getElementById('chat-log');
+  const div = document.createElement('div');
+  div.className = `msg ${role}`;
+  const time = new Date().toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit' });
+  div.innerHTML = `
+    <div class="msg-avatar">${role === 'nexus' ? 'NX' : 'ND'}</div>
+    <div class="msg-content">
+      <div class="msg-sender">${role === 'nexus' ? 'NEXUS' : 'NADINE'}</div>
+      <div class="msg-text">${isThinking ? '<div class="thinking-dots"><span></span><span></span><span></span></div>' : escapeHtml(text)}</div>
+      ${!isThinking ? `<div class="msg-time">${time}</div>` : ''}
+    </div>`;
+  log.appendChild(div);
+  log.scrollTop = log.scrollHeight;
+  return div;
+}
+
+function escapeHtml(t) {
+  return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
+}
+
+async function callAPI(payload) {
+  const headers = {
+    'Content-Type': 'application/json',
+    'x-api-key': apiKey,
+    'anthropic-version': '2023-06-01',
+    'anthropic-dangerous-direct-browser-access': 'true'
+  };
+  const isFile = window.location.protocol === 'file:';
+  const url = isFile
+    ? 'https://corsproxy.io/?https://api.anthropic.com/v1/messages'
+    : 'https://api.anthropic.com/v1/messages';
+  const res = await fetch(url, { method: 'POST', headers, body: JSON.stringify(payload) });
+  if (!res.ok) {
+    let msg = `Error ${res.status}`;
+    try { const e = await res.json(); msg = e.error?.message || msg; } catch(_) {}
+    throw new Error(msg);
+  }
+  return await res.json();
+}
+
+async function sendMessage(text) {
+  if (!text.trim()) return;
+  addMessage('user', text);
+  conversationHistory.push({ role: 'user', content: text });
+  const thinking = addMessage('nexus', '', true);
+  setStatus('thinking');
+  try {
+    const data = await callAPI({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 1024,
+      system: NEXUS_SYSTEM,
+      messages: conversationHistory
+    });
+    const reply = data.content[0]?.text || 'Systems nominal. Please repeat your query.';
+    conversationHistory.push({ role: 'assistant', content: reply });
+    const time = new Date().toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit' });
+    thinking.querySelector('.msg-text').innerHTML = escapeHtml(reply);
+    thinking.querySelector('.msg-content').innerHTML += `<div class="msg-time">${time}</div>`;
+    setStatus('ready');
+    speak(reply);
+  } catch(err) {
+    thinking.querySelector('.msg-text').textContent = `System error: ${err.message}`;
+    setStatus('ready');
+  }
+}
+</script>
+</body>
+</html>
