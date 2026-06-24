@@ -189,19 +189,19 @@ header {
     <div class="orb-wrap">
       <div class="arc arc-1"></div><div class="arc arc-2"></div><div class="arc arc-3"></div><div class="arc arc-4"></div>
       <div class="pulse-ring" id="pulse1"></div><div class="pulse-ring" id="pulse2"></div><div class="pulse-ring" id="pulse3"></div>
-      <div class="orb-core" id="orb-core" onclick="toggleMic()" title="Click to speak"></div>
+      <div class="orb-core" id="orb-core" onclick="toggleMic()" title="Toggle hands-free mode"></div>
     </div>
   </div>
   <div id="state-label">STANDBY</div>
   <div id="chat-log"></div>
-  <div class="voice-hint" id="voice-hint">CLICK ORB OR MIC TO SPEAK · DROP FILES TO ANALYZE · TYPE TO SEND</div>
+  <div class="voice-hint" id="voice-hint">TAP MIC FOR HANDS-FREE · SAY "NEXUS" TO ACTIVATE · DROP FILES · TYPE TO SEND</div>
   <div id="controls">
     <input type="file" id="file-input" style="display:none" accept=".xlsx,.xls,.csv,.pdf,.png,.jpg,.jpeg,.txt,.md,.json" />
     <button class="ctrl-btn" id="file-btn" onclick="document.getElementById('file-input').click()" title="Upload file">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
     </button>
     <input type="text" id="text-input" placeholder="Input command..." />
-    <button class="ctrl-btn" id="mic-btn" onclick="toggleMic()" title="Voice input">
+    <button class="ctrl-btn" id="mic-btn" onclick="toggleMic()" title="Toggle hands-free mode">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 1 3 3v7a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/><line x1="9" y1="22" x2="15" y2="22"/></svg>
     </button>
     <button class="ctrl-btn" id="send-btn" onclick="sendText()" title="Send">
@@ -345,18 +345,118 @@ function checkVoiceSupport() {
   if (!speechSupported) { document.getElementById('voice-hint').textContent = 'VOICE UNAVAILABLE — USE CHROME'; document.getElementById('mic-btn').classList.add('disabled'); }
 }
 
+// ── Hands-free voice engine ──
+// Modes: handsFree ON = wake-word listening + auto-listen after reply
+let handsFree = false;          // master toggle for hands-free mode
+let wakeListening = false;      // background wake-word detector running
+let activeCapture = false;      // actively capturing a command after wake/activation
+let restartTimer = null;
+
+const WAKE_WORDS = ['nexus', 'hey nexus', 'hi nexus', 'okay nexus', 'ok nexus'];
+
 function setupSpeechRecognition() {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SR) return;
   recognition = new SR();
-  recognition.continuous = false; recognition.interimResults = false; recognition.lang = 'en-PH';
-  recognition.onresult = e => { const t = e.results[0][0].transcript; document.getElementById('text-input').value = t; stopListening(); sendMessage(t); };
-  recognition.onerror = e => { stopListening(); if (e.error !== 'no-speech' && e.error !== 'aborted') addMessage('nexus','Audio input failed. Try again or use text.'); };
-  recognition.onend = () => { if (isListening) stopListening(); };
+  recognition.continuous = true;       // keep the stream open
+  recognition.interimResults = true;   // needed to catch wake word quickly
+  recognition.lang = 'en-PH';
+
+  recognition.onresult = e => {
+    // Build the latest transcript
+    let interim = '', finalText = '';
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      const txt = e.results[i][0].transcript;
+      if (e.results[i].isFinal) finalText += txt; else interim += txt;
+    }
+    const heard = (finalText || interim).trim().toLowerCase();
+
+    if (activeCapture) {
+      // We're capturing a command — show it live
+      document.getElementById('text-input').value = (finalText || interim).trim();
+      if (finalText.trim()) {
+        const command = finalText.trim();
+        // Strip wake word if it leaked into the command
+        let cleaned = command;
+        WAKE_WORDS.forEach(w => { cleaned = cleaned.replace(new RegExp('^\\s*' + w + '[,.!?]?\\s*', 'i'), ''); });
+        activeCapture = false;
+        document.getElementById('text-input').value = '';
+        if (cleaned.trim()) sendMessage(cleaned.trim());
+      }
+    } else if (wakeListening) {
+      // Listening for the wake word
+      if (WAKE_WORDS.some(w => heard.includes(w))) {
+        // Wake word detected — start capturing the command
+        activeCapture = true;
+        setStatus('listening');
+        document.getElementById('voice-hint').textContent = 'NEXUS ACTIVE — SPEAK YOUR COMMAND';
+        document.getElementById('mic-btn').classList.add('active');
+        // If they said "nexus, do X" all at once, capture what follows
+        let after = heard;
+        WAKE_WORDS.forEach(w => { const idx = after.indexOf(w); if (idx !== -1) after = after.slice(idx + w.length); });
+        after = after.replace(/^[,.!?\s]+/, '').trim();
+        if (after && finalText) {
+          activeCapture = false;
+          sendMessage(after);
+        }
+      }
+    }
+  };
+
+  recognition.onerror = e => {
+    if (e.error === 'no-speech' || e.error === 'aborted') return;
+    if (e.error === 'not-allowed') {
+      addMessage('nexus', 'Microphone access denied. Enable it in your browser settings to use voice.');
+      handsFree = false;
+    }
+  };
+
+  recognition.onend = () => {
+    // Auto-restart the engine if hands-free is still on
+    if (handsFree) {
+      clearTimeout(restartTimer);
+      restartTimer = setTimeout(() => { try { recognition.start(); } catch(e) {} }, 300);
+    } else {
+      isListening = false;
+      document.getElementById('mic-btn').classList.remove('active');
+      setStatus('ready');
+    }
+  };
 }
-function toggleMic() { if (!speechSupported) return; if (isListening) { stopListening(); return; } if (isSpeaking) stopSpeaking(); startListening(); }
-function startListening() { if (!recognition) return; isListening = true; document.getElementById('mic-btn').classList.add('active'); document.getElementById('voice-hint').textContent = 'RECEIVING INPUT — TAP TO CANCEL'; setStatus('listening'); try { recognition.start(); } catch(e) { stopListening(); } }
-function stopListening() { isListening = false; document.getElementById('mic-btn').classList.remove('active'); document.getElementById('voice-hint').textContent = 'CLICK ORB OR MIC TO SPEAK · DROP FILES TO ANALYZE · TYPE TO SEND'; setStatus('ready'); try { recognition.stop(); } catch(e) {} }
+
+// Toggle hands-free mode on/off (this is what the mic button now does)
+function toggleMic() {
+  if (!speechSupported) return;
+  if (handsFree) {
+    // Turn OFF
+    handsFree = false; wakeListening = false; activeCapture = false;
+    clearTimeout(restartTimer);
+    try { recognition.stop(); } catch(e) {}
+    document.getElementById('mic-btn').classList.remove('active');
+    document.getElementById('voice-hint').textContent = 'CLICK ORB OR MIC TO SPEAK · DROP FILES · TYPE TO SEND';
+    setStatus('ready');
+  } else {
+    // Turn ON hands-free
+    if (isSpeaking) stopSpeaking();
+    handsFree = true; wakeListening = true; activeCapture = false;
+    document.getElementById('mic-btn').classList.add('active');
+    document.getElementById('voice-hint').textContent = 'HANDS-FREE ON — SAY "NEXUS" TO ACTIVATE · TAP MIC TO STOP';
+    setStatus('ready');
+    try { recognition.start(); } catch(e) {}
+  }
+}
+
+// Legacy helpers kept for compatibility
+function startListening() { if (!handsFree) toggleMic(); }
+function stopListening() {
+  activeCapture = false;
+  document.getElementById('mic-btn').classList.remove('active');
+  if (handsFree) {
+    wakeListening = true;
+    document.getElementById('voice-hint').textContent = 'HANDS-FREE ON — SAY "NEXUS" TO ACTIVATE · TAP MIC TO STOP';
+  }
+  setStatus('ready');
+}
 
 function speak(text) {
   if (!('speechSynthesis' in window)) return;
@@ -370,8 +470,32 @@ function speak(text) {
     for (const name of preferred) { const f = voices.find(v => v.name.includes(name)); if (f) return f; }
     return voices.find(v => v.lang.includes('en-US')) || voices.find(v => v.lang.includes('en'));
   }
-  currentUtterance.onstart = () => { isSpeaking = true; setStatus('speaking'); };
-  currentUtterance.onend = () => { isSpeaking = false; setStatus('ready'); };
+  currentUtterance.onstart = () => {
+    isSpeaking = true; setStatus('speaking');
+    // Pause capture while speaking to avoid feedback
+    activeCapture = false; wakeListening = false;
+  };
+  currentUtterance.onend = () => {
+    isSpeaking = false;
+    setStatus('ready');
+    // Auto-listen: after NEXUS speaks, reopen capture for a natural back-and-forth
+    if (handsFree) {
+      activeCapture = true;
+      wakeListening = false;
+      document.getElementById('mic-btn').classList.add('active');
+      document.getElementById('voice-hint').textContent = 'LISTENING FOR YOUR REPLY — OR SAY "NEXUS" ANYTIME';
+      setStatus('listening');
+      // Fall back to wake-word mode if no reply within 8 seconds
+      clearTimeout(window._replyTimeout);
+      window._replyTimeout = setTimeout(() => {
+        if (activeCapture && handsFree) {
+          activeCapture = false; wakeListening = true;
+          setStatus('ready');
+          document.getElementById('voice-hint').textContent = 'HANDS-FREE ON — SAY "NEXUS" TO ACTIVATE · TAP MIC TO STOP';
+        }
+      }, 8000);
+    }
+  };
   currentUtterance.onerror = () => { isSpeaking = false; setStatus('ready'); };
   const voices = window.speechSynthesis.getVoices();
   if (voices.length === 0) {
