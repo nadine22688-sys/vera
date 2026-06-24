@@ -710,41 +710,47 @@ function speak(text) {
   currentUtterance.pitch = 1.05;
   currentUtterance.volume = 1;
 
-  // Pick best female voice
+  // Pick best voice — prioritize Siri Voice 4, then Karen, then other quality voices
+  const preferred = ['Siri Voice 4', 'Siri Female', 'Karen', 'Moira', 'Tessa', 'Samantha'];
+
+  function pickVoice(voices) {
+    for (const name of preferred) {
+      const found = voices.find(v => v.name.includes(name));
+      if (found) return found;
+    }
+    // fallback: any English voice
+    return voices.find(v => v.lang.includes('en-AU'))
+        || voices.find(v => v.lang.includes('en-GB'))
+        || voices.find(v => v.lang.includes('en'));
+  }
+
   const voices = window.speechSynthesis.getVoices();
-  const preferred = ['Samantha', 'Karen', 'Moira', 'Tessa', 'Victoria', 'Fiona'];
-  let chosen = voices.find(v => preferred.some(p => v.name.includes(p)) && v.lang.includes('en'));
-  if (!chosen) chosen = voices.find(v => v.lang.includes('en') && v.name.toLowerCase().includes('female'));
-  if (!chosen) chosen = voices.find(v => v.lang.includes('en-US'));
-  if (chosen) currentUtterance.voice = chosen;
 
   currentUtterance.onstart = () => {
     isSpeaking = true;
     setStatus('speaking');
-    document.getElementById('stop-btn').classList.add('visible');
   };
 
   currentUtterance.onend = () => {
     isSpeaking = false;
     setStatus('ready');
-    document.getElementById('stop-btn').classList.remove('visible');
   };
 
   currentUtterance.onerror = () => {
     isSpeaking = false;
     setStatus('ready');
-    document.getElementById('stop-btn').classList.remove('visible');
   };
 
-  // Voices may load async
   if (voices.length === 0) {
     window.speechSynthesis.onvoiceschanged = () => {
       const v2 = window.speechSynthesis.getVoices();
-      const c2 = v2.find(v => preferred.some(p => v.name.includes(p)) && v.lang.includes('en'));
-      if (c2) currentUtterance.voice = c2;
+      const chosen = pickVoice(v2);
+      if (chosen) currentUtterance.voice = chosen;
       window.speechSynthesis.speak(currentUtterance);
     };
   } else {
+    const chosen = pickVoice(voices);
+    if (chosen) currentUtterance.voice = chosen;
     window.speechSynthesis.speak(currentUtterance);
   }
 }
