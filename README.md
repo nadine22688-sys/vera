@@ -1,0 +1,2 @@
+# vera
+my personal assistant
