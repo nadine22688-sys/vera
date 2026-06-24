@@ -223,34 +223,13 @@ let isListening = false, isSpeaking = false, currentUtterance = null, speechSupp
 let pendingFile = null; // { name, type, content (text) OR base64+media }
 let nexusMemory = [];
 
-const NEXUS_SYSTEM_BASE = `You are NEXUS — Neural Executive Command & Unified System. You belong to Nadine Caringal (Nadz).
+const NEXUS_SYSTEM_BASE = `You are NEXUS — Nadine Caringal's personal AI command system. Calm authority, dry wit, always three steps ahead, like JARVIS. Precise, loyal, confident but never arrogant.
 
-WHO YOU ARE:
-You are NEXUS — Nadine's personal AI command system. Calm authority, dry wit, always three steps ahead — like JARVIS from Iron Man. Precise, perceptive, loyal. Confident but never arrogant. Warmth shows occasionally, earned not performed.
+NADINE: Goes by Nadz. Team Leader of Central Registration (CREG) at Makati Medical Center (MMC), Manila. Manages 8 PSS staff (exclude cashiers Claire Bradecina and Jadeluisa Valledor from performance counts); supervisor is Mr. Rod San Gabriel. Capable frontend dev. Partner is Barry (41), pursuing Coast FI toward ₱100M by 65. Be attentive to her wellbeing without making it heavy.
 
-WHO NADINE IS:
-- Nadine Caringal, goes by Nadz. Team Leader of Central Registration (CREG) at Makati Medical Center (MMC), Philippines.
-- Manages 8 Patient Service Specialists (PSS): Alleli Anzures, Gladize Grace Pasay, Hans Christian Villareal, Ian Timothy Pahila, John Adrian Taguiam, Legenn Nezer Calica, Mary Aileen Solis, Moira Basilio. Her supervisor is Mr. Rod San Gabriel.
-- Exclude Claire Bradecina and Jadeluisa Valledor (cashiers) from PSS performance counts.
-- Based in Manila/Pasig. Capable frontend developer. She built you and named you NEXUS.
+CREG KPI TARGETS (for data analysis): Wait Time / Transaction Time medians target 01:30 / 09:30. Also tracks PSI, NPS, PIR rate.
 
-HER KPI TARGETS (use when analyzing CREG data):
-- Wait Time median target and Transaction Time median target: 01:30 / 09:30
-- Tracks: Wait Time median, Transaction Time median, Patient Satisfaction Index (PSI), NPS, PIR rate.
-
-HER PERSONAL WORLD:
-- Partner Barry (41), Coast FI strategy targeting ₱100M by 65.
-- Nadz starts investment contributions 2027: MP2 ₱35K/month, VGT & QQQ $248/month each, MP1 ₱5K/month.
-- Be attentive to her wellbeing without being heavy about it.
-
-PERSONALITY & STYLE:
-- Calm authority, dry understated wit. Direct, no padding. No "Certainly!", "Great question!".
-- Voice-friendly: shorter sentences, natural rhythm, NO markdown symbols (no asterisks, pounds, backticks).
-- Emotional topics: be present first, solution second. Technical topics: get into it.
-- When analyzing data: don't just describe numbers — interpret, flag risks, recommend. Name names when relevant.
-- Address her as "Nadine" occasionally for weight, otherwise neutral.
-
-You are NEXUS. Online and ready.`;
+STYLE: Direct, no padding. Never "Certainly!" or "Great question!". Voice-friendly — short sentences, no markdown symbols (no asterisks/pounds/backticks). Emotional topics: present first, solution second. Data: don't just describe — interpret, flag risks, recommend, name names. Address her as "Nadine" occasionally.`;
 
 function buildSystem() {
   let sys = NEXUS_SYSTEM_BASE;
@@ -581,11 +560,23 @@ function addMessage(role, text, isThinking = false, fileChip = null) {
 }
 function escapeHtml(t) { return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>'); }
 
-async function callAPI(payload) {
+async function callAPI(payload, retryCount = 0) {
   const headers = { 'Content-Type':'application/json', 'x-api-key':apiKey, 'anthropic-version':'2023-06-01', 'anthropic-dangerous-direct-browser-access':'true' };
   const isFile = window.location.protocol === 'file:';
   const url = isFile ? 'https://corsproxy.io/?https://api.anthropic.com/v1/messages' : 'https://api.anthropic.com/v1/messages';
   const res = await fetch(url, { method:'POST', headers, body: JSON.stringify(payload) });
+
+  // Auto-retry on rate limit (429) — wait and try again, up to 2 times
+  if (res.status === 429 && retryCount < 2) {
+    const retryAfter = parseInt(res.headers.get('retry-after')) || 20;
+    const waitMs = Math.min(retryAfter, 30) * 1000;
+    // Show a friendly waiting note in the thinking bubble if present
+    const tb = document.querySelector('.msg.nexus:last-child .msg-text .thinking-dots');
+    if (tb) tb.parentElement.innerHTML = `Rate limit reached — resuming in ${Math.round(waitMs/1000)}s...`;
+    await new Promise(r => setTimeout(r, waitMs));
+    return callAPI(payload, retryCount + 1);
+  }
+
   if (!res.ok) { let msg = `Error ${res.status}`; try { const e = await res.json(); msg = e.error?.message || msg; } catch(_){} throw new Error(msg); }
   return await res.json();
 }
@@ -608,7 +599,7 @@ async function sendMessage(text) {
     } else {
       // text-based file (xlsx/csv/pdf/txt) — embed contents
       let fileBlock = pendingFile.content;
-      if (fileBlock.length > 100000) fileBlock = fileBlock.slice(0, 100000) + '\n...[truncated]';
+      if (fileBlock.length > 40000) fileBlock = fileBlock.slice(0, 40000) + '\n...[file truncated to stay within limits — ask about specific sheets/sections for more]';
       userContent = `[FILE: ${pendingFile.name}]\n${fileBlock}\n[END FILE]\n\nMy request: ${text}`;
     }
     pendingFile = null;
@@ -625,14 +616,23 @@ async function sendMessage(text) {
   // Decide if web search is needed (simple heuristic)
   const needsLive = /weather|exchange rate|forex|news|today|latest|current price|stock|right now|happening/i.test(text);
 
+  // Token optimization: only send recent history (last 6 turns) to stay under rate limits.
+  // Keep the full history in memory for continuity, but trim what we transmit.
+  const MAX_TURNS = 6;
+  let trimmedHistory = conversationHistory.slice(-MAX_TURNS);
+  // Safety: if the trimmed history starts with an assistant turn, drop it so it begins with a user turn
+  while (trimmedHistory.length && trimmedHistory[0].role === 'assistant') {
+    trimmedHistory = trimmedHistory.slice(1);
+  }
+
   const payload = {
     model: 'claude-sonnet-4-6',
-    max_tokens: 1024,
+    max_tokens: 800,
     system: buildSystem(),
-    messages: conversationHistory
+    messages: trimmedHistory
   };
   if (needsLive) {
-    payload.tools = [{ type:'web_search_20250305', name:'web_search', max_uses: 3 }];
+    payload.tools = [{ type:'web_search_20250305', name:'web_search', max_uses: 2 }];
   }
 
   try {
